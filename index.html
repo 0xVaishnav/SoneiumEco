@@ -12,17 +12,14 @@
         #ui-panel {
             position: absolute; top: 20px; left: 20px; z-index: 10;
             background: rgba(5, 5, 10, 0.7);
-            border: 1px solid #2a2a3a;
-            border-radius: 8px;
-            padding: 15px;
-            font-size: 12px;
-            line-height: 1.6;
-            backdrop-filter: blur(8px);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            min-width: 280px;
+            border: 1px solid #2a2a3a; border-radius: 8px;
+            padding: 15px; font-size: 12px; line-height: 1.6;
+            backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            min-width: 280px; display: none;
         }
         
         .tab-row { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid #2a2a3a; padding-bottom: 10px; }
+        .tab-row.no-border { border-bottom: none; margin-bottom: 0; }
         .tab-btn {
             background: transparent; border: 1px solid #2a2a3a; color: #6a6a7a;
             padding: 5px 10px; border-radius: 4px; cursor: pointer; font-family: monospace;
@@ -39,7 +36,7 @@
             font-size: 18px; color: #00cccc; text-shadow: 0 0 10px rgba(0,204,204,0.5); z-index: 20;
             animation: pulse 1.5s infinite;
         }
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
@@ -54,13 +51,13 @@
 <body>
     <div id="loading-overlay">Syncing Ambient Architectures...</div>
 
-    <div id="ui-panel" style="display: none;">
+    <div id="ui-panel">
         <div class="tab-row" id="network-tabs">
             <button class="tab-btn active" onclick="switchNetwork('startale')">STARTALE</button>
             <button class="tab-btn" onclick="switchNetwork('soneium')">SONEIUM</button>
             <button class="tab-btn" onclick="switchNetwork('astar')">ASTAR</button>
         </div>
-        <div class="tab-row" id="input-tabs" style="border-bottom: none; margin-bottom: 0;">
+        <div class="tab-row no-border" id="input-tabs">
             <button class="tab-btn active" id="btn-camera" onclick="switchInput('camera')">📷 CAMERA</button>
             <button class="tab-btn" id="btn-mouse" onclick="switchInput('mouse')">🖱️ MOUSE</button>
         </div>
@@ -76,9 +73,19 @@
     <video id="webcamVideo" autoplay playsinline></video>
 
     <script>
-        // --- 1. Three.js Setup & Post-Processing ---
+        // --- 1. DOM Elements ---
+        const uiElements = {
+            overlay: document.getElementById('loading-overlay'),
+            panel: document.getElementById('ui-panel'),
+            status: document.getElementById('gesture-status'),
+            nodeText: document.getElementById('active-node-text'),
+            video: document.getElementById('webcamVideo')
+        };
+
+        // --- 2. Three.js & Post-Processing Setup ---
         const scene = new THREE.Scene();
         scene.fog = new THREE.FogExp2(0x010102, 0.004); 
+        
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 140; 
         
@@ -87,144 +94,151 @@
         renderer.setClearColor(0x010102, 1); 
         document.body.appendChild(renderer.domElement);
 
-        // Subdued ambient lighting so colors don't wash out
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(2, 2, 2);
-        scene.add(directionalLight);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(2, 2, 2);
+        scene.add(dirLight);
 
-        // MAGIC RECIPE: Tamed Unreal Bloom Setup
         const renderScene = new THREE.RenderPass(scene, camera);
-        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        // THRESHOLD: Increased to 0.35. Only brighter elements will glow, preventing the whole screen from washing out.
-        bloomPass.threshold = 0.25; 
-        // STRENGTH: Drastically reduced from 1.8 down to 0.5. This gives a soft halo instead of a blinding flash.
-        bloomPass.strength = 0.7;  
-        // RADIUS: Tightened to keep the glow closer to the nodes.
-        bloomPass.radius = 0.25;    
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.25, 0.25);
         
         const composer = new THREE.EffectComposer(renderer);
         composer.addPass(renderScene);
         composer.addPass(bloomPass);
 
-        // --- 2. Network Data Storage ---
+        // --- 3. Network State ---
         const networks = { startale: null, soneium: null, astar: null };
         let activeNetworkKey = 'startale';
         const dummy = new THREE.Object3D();
         const color = new THREE.Color();
 
-        // --- 3. Async Image Scanning Engine ---
+        // --- 4. Image Processing Engine ---
         function buildNetwork(imageSrc, isColorExtracted, bgType = 'dark') {
-            return new Promise((resolve) => {
+            return new Promise((resolve, reject) => {
                 const img = new Image();
                 img.src = imageSrc; 
                 img.onload = () => {
-                    const imgCanvas = document.createElement('canvas');
-                    const ctx = imgCanvas.getContext('2d');
-                    const targetWidth = 140; const targetHeight = 140;
-                    imgCanvas.width = targetWidth; imgCanvas.height = targetHeight;
-                    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-                    const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight).data;
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const size = 140;
+                    canvas.width = size; canvas.height = size;
+                    ctx.drawImage(img, 0, 0, size, size);
+                    const imgData = ctx.getImageData(0, 0, size, size).data;
 
-                    const instancingData = [];
+                    const instancingData = [], particlesData = [], originalMatrices = [];
+                    const targetColors = [], lineIndices = [];
                     const gridMap = new Map(); 
                     let nodeIndex = 0;
-                    const particlesData = [];
-                    const originalMatrices = [];
-                    const targetColors = [];
-                    const lineIndices = [];
 
-                    for(let y = 0; y < targetHeight; y++) {
-                        for(let x = 0; x < targetWidth; x++) {
-                            const i = (y * targetWidth + x) * 4;
-                            const r = imgData[i]; const g = imgData[i+1]; const b = imgData[i+2];
+                    for(let y = 0; y < size; y++) {
+                        for(let x = 0; x < size; x++) {
+                            const i = (y * size + x) * 4;
+                            const [r, g, b] = [imgData[i], imgData[i+1], imgData[i+2]];
                             
-                            let isLogoPixel = false;
-                            if (bgType === 'dark') isLogoPixel = ((r + g + b) / 3) > 20; 
-                            else if (bgType === 'light') isLogoPixel = (r < 240 || g < 240 || b < 240); 
+                            const isLogoPixel = bgType === 'dark' ? ((r + g + b) / 3) > 20 : (r < 240 || g < 240 || b < 240); 
 
                             if (isLogoPixel) {
-                                const pX = (x - targetWidth / 2) * 1.1;
-                                const pY = -(y - targetHeight / 2) * 1.1;
+                                const pX = (x - size / 2) * 1.1;
+                                const pY = -(y - size / 2) * 1.1;
                                 const pZ = (Math.random() - 0.5) * 4; 
 
-                                if (isColorExtracted) color.setRGB(r/255, g/255, b/255);
-                                else {
-                                    const normalizedX = x / targetWidth;
-                                    color.setRGB(0.1 + normalizedX * 0.8, 0.9 - normalizedX * 0.5, 1.0);
+                                if (isColorExtracted) {
+                                    color.setRGB(r/255, g/255, b/255);
+                                } else {
+                                    const normX = x / size;
+                                    color.setRGB(0.1 + normX * 0.8, 0.9 - normX * 0.5, 1.0);
                                 }
                                 
                                 instancingData.push({ pos: new THREE.Vector3(pX, pY, pZ), color: color.clone() });
                                 particlesData.push({ phaseX: Math.random() * Math.PI * 2, phaseY: Math.random() * Math.PI * 2, scale: 0.8 + Math.random() * 0.4 });
-                                gridMap.set(`${x},${y}`, nodeIndex);
-                                nodeIndex++;
+                                gridMap.set(`${x},${y}`, nodeIndex++);
                             }
                         }
                     }
 
                     const count = instancingData.length;
-                    const currentPositionsArray = new Float32Array(count * 3);
+                    const currentPositions = new Float32Array(count * 3);
 
-                    for(let y = 0; y < targetHeight; y++) {
-                        for(let x = 0; x < targetWidth; x++) {
+                    for(let y = 0; y < size; y++) {
+                        for(let x = 0; x < size; x++) {
                             const currentIdx = gridMap.get(`${x},${y}`);
                             if (currentIdx !== undefined) {
                                 const rightIdx = gridMap.get(`${x+1},${y}`);
-                                if (rightIdx !== undefined) lineIndices.push(currentIdx, rightIdx);
                                 const bottomIdx = gridMap.get(`${x},${y+1}`);
+                                if (rightIdx !== undefined) lineIndices.push(currentIdx, rightIdx);
                                 if (bottomIdx !== undefined) lineIndices.push(currentIdx, bottomIdx);
                             }
                         }
                     }
 
-                    const geometry = new THREE.BoxGeometry(0.7, 0.7, 0.7); 
-                    const material = new THREE.MeshLambertMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85 });
-                    const instancedMesh = new THREE.InstancedMesh(geometry, material, count);
+                    const mesh = new THREE.InstancedMesh(
+                        new THREE.BoxGeometry(0.7, 0.7, 0.7),
+                        new THREE.MeshLambertMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85 }),
+                        count
+                    );
                     
                     for (let i = 0; i < count; i++) {
                         dummy.position.copy(instancingData[i].pos);
                         dummy.updateMatrix();
-                        instancedMesh.setMatrixAt(i, dummy.matrix);
+                        mesh.setMatrixAt(i, dummy.matrix);
                         originalMatrices.push(dummy.matrix.clone());
-                        instancedMesh.setColorAt(i, instancingData[i].color);
+                        mesh.setColorAt(i, instancingData[i].color);
                         targetColors.push(instancingData[i].color.clone());
                     }
 
-                    const lineGeometry = new THREE.BufferGeometry();
-                    lineGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lineIndices.length * 3), 3));
-                    const lineColor = isColorExtracted ? 0xaa66dd : 0x00cccc;
-                    const lineMat = new THREE.LineBasicMaterial({ color: lineColor, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false });
-                    const lineSegments = new THREE.LineSegments(lineGeometry, lineMat);
+                    const lineGeo = new THREE.BufferGeometry();
+                    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lineIndices.length * 3), 3));
+                    const lines = new THREE.LineSegments(
+                        lineGeo,
+                        new THREE.LineBasicMaterial({ color: isColorExtracted ? 0xaa66dd : 0x00cccc, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })
+                    );
                     
-                    const networkGroup = new THREE.Group();
-                    networkGroup.add(instancedMesh);
-                    networkGroup.add(lineSegments);
-                    networkGroup.visible = false; 
-                    scene.add(networkGroup);
+                    const group = new THREE.Group();
+                    group.add(mesh); group.add(lines);
+                    group.visible = false; 
+                    scene.add(group);
 
-                    resolve({ group: networkGroup, mesh: instancedMesh, lines: lineSegments, particlesData: particlesData, originalMatrices: originalMatrices, targetColors: targetColors, lineIndices: lineIndices, currentPositionsArray: currentPositionsArray, count: count });
+                    resolve({ group, mesh, lines, particlesData, originalMatrices, targetColors, lineIndices, currentPositions, count });
                 };
+                img.onerror = reject;
             });
         }
 
+        // --- 5. Initialization ---
         Promise.all([
             buildNetwork('startale.jpg', false, 'dark'), 
             buildNetwork('soneium.jpg', true, 'dark'),    
             buildNetwork('astar.jpg', true, 'dark')
         ]).then((results) => {
-            networks.startale = results[0]; networks.soneium = results[1]; networks.astar = results[2];
-            document.getElementById('loading-overlay').style.display = 'none';
-            document.getElementById('ui-panel').style.display = 'block';
+            networks.startale = results[0]; 
+            networks.soneium = results[1]; 
+            networks.astar = results[2];
+            
+            uiElements.overlay.style.display = 'none';
+            uiElements.panel.style.display = 'block';
             networks.startale.group.visible = true;
+            
             camera_mp.start();
             animate();
+        }).catch(err => {
+            uiElements.overlay.innerText = "Error loading image assets.";
+            console.error("Asset load failed:", err);
         });
 
-        window.switchNetwork = function(networkName) {
+        // --- 6. Input & Interactions ---
+        let inputMode = 'camera', targetPinchMultiplier = 1.0;
+        const handPos = { x: 0, y: 0, active: false };
+        const mousePos = { active: false };
+        const mouseNDC = new THREE.Vector2(); 
+        const mouseWorldPos = new THREE.Vector3();
+        const raycaster = new THREE.Raycaster();
+        const zeroPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); 
+
+        // UI Controllers
+        window.switchNetwork = (networkName) => {
             document.querySelectorAll('#network-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
-            document.getElementById('active-node-text').innerText = `'${networkName}'`;
+            uiElements.nodeText.innerText = `'${networkName}'`;
 
             if (activeNetworkKey !== networkName) {
                 networks[activeNetworkKey].group.visible = false;
@@ -233,80 +247,58 @@
             }
         };
 
-        // --- 5. Tracking Engine ---
-        let inputMode = 'camera'; 
-        const gestureStatus = document.getElementById('gesture-status');
-        let targetPinchMultiplier = 1.0;
-
-        // Camera
-        let handPos = { x: 0, y: 0, active: false };
-        const webcamVideo = document.getElementById('webcamVideo');
-        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-        
-        hands.onResults((results) => {
-            if(inputMode !== 'camera') return; 
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                handPos.active = true;
-                const landmarks = results.multiHandLandmarks[0];
-                handPos.x = (landmarks[8].x - 0.5) * targetPinchMultiplier * 140; 
-                handPos.y = -(landmarks[8].y - 0.5) * targetPinchMultiplier * 140;
-
-                const dx = landmarks[8].x - landmarks[4].x;
-                const dy = landmarks[8].y - landmarks[4].y;
-                targetPinchMultiplier = 1.0 + (Math.sqrt(dx*dx + dy*dy) * 14);
-                gestureStatus.innerText = targetPinchMultiplier > 1.8 ? "Elastic Stretch" : "Tracking Hand";
-            } else {
-                handPos.active = false; targetPinchMultiplier = 1.0; gestureStatus.innerText = "Camera Active (No Hand)";
-            }
-        });
-        const camera_mp = new Camera(webcamVideo, { onFrame: async () => { await hands.send({image: webcamVideo}); }, width: 640, height: 480 });
-
-        // Mouse
-        const raycaster = new THREE.Raycaster();
-        const mouseNDC = new THREE.Vector2(); 
-        const zeroPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); 
-        let mouseWorldPos = new THREE.Vector3();
-        let mousePos = { active: false };
-
-        window.addEventListener('mousemove', (e) => {
-            if(inputMode !== 'mouse') return;
-            mousePos.active = true;
-            mouseNDC.x = (e.clientX / window.innerWidth) * 2 - 1;
-            mouseNDC.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouseNDC, camera);
-            raycaster.ray.intersectPlane(zeroPlane, mouseWorldPos);
-        });
-
-        window.addEventListener('mousedown', () => {
-            if(inputMode !== 'mouse') return;
-            targetPinchMultiplier = 2.5; gestureStatus.innerText = "Magnetic Burst";
-        });
-
-        window.addEventListener('mouseup', () => {
-            if(inputMode !== 'mouse') return;
-            targetPinchMultiplier = 1.0; gestureStatus.innerText = "Magnetic Hover";
-        });
-
-        window.addEventListener('mouseleave', () => {
-            if(inputMode === 'mouse') { mousePos.active = false; targetPinchMultiplier = 1.0; gestureStatus.innerText = "Standby"; }
-        });
-
-        window.switchInput = function(mode) {
+        window.switchInput = (mode) => {
             inputMode = mode;
             document.querySelectorAll('#input-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
             document.getElementById(`btn-${mode}`).classList.add('active');
             targetPinchMultiplier = 1.0; handPos.active = false; mousePos.active = false;
-            gestureStatus.innerText = mode === 'camera' ? "Searching..." : "Ready";
+            uiElements.status.innerText = mode === 'camera' ? "Searching..." : "Ready";
         };
 
-        // --- 6. Unified Animation Loop ---
-        let time = 0;
-        let pinchMultiplier = 1.0;
-        const tempPosition = new THREE.Vector3();
+        // MediaPipe Integration
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        hands.onResults((results) => {
+            if(inputMode !== 'camera') return; 
+            if (results.multiHandLandmarks?.length > 0) {
+                handPos.active = true;
+                const lm = results.multiHandLandmarks[0];
+                handPos.x = (lm[8].x - 0.5) * targetPinchMultiplier * 140; 
+                handPos.y = -(lm[8].y - 0.5) * targetPinchMultiplier * 140;
 
-        const REPEL_RADIUS = 10;     
-        const REPEL_STRENGTH = 35;  
+                const dx = lm[8].x - lm[4].x, dy = lm[8].y - lm[4].y;
+                targetPinchMultiplier = 1.0 + (Math.sqrt(dx*dx + dy*dy) * 14);
+                uiElements.status.innerText = targetPinchMultiplier > 1.8 ? "Elastic Stretch" : "Tracking Hand";
+            } else {
+                handPos.active = false; targetPinchMultiplier = 1.0; 
+                uiElements.status.innerText = "Camera Active (No Hand)";
+            }
+        });
+        const camera_mp = new Camera(uiElements.video, { onFrame: async () => { await hands.send({image: uiElements.video}); }, width: 640, height: 480 });
+
+        // Mouse Events
+        window.addEventListener('mousemove', (e) => {
+            if(inputMode !== 'mouse') return;
+            mousePos.active = true;
+            mouseNDC.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+            raycaster.setFromCamera(mouseNDC, camera);
+            raycaster.ray.intersectPlane(zeroPlane, mouseWorldPos);
+        });
+        window.addEventListener('mousedown', () => { if(inputMode === 'mouse') { targetPinchMultiplier = 2.5; uiElements.status.innerText = "Magnetic Burst"; }});
+        window.addEventListener('mouseup', () => { if(inputMode === 'mouse') { targetPinchMultiplier = 1.0; uiElements.status.innerText = "Magnetic Hover"; }});
+        window.addEventListener('mouseleave', () => { if(inputMode === 'mouse') { mousePos.active = false; targetPinchMultiplier = 1.0; uiElements.status.innerText = "Standby"; }});
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 7. Animation Loop ---
+        let time = 0, pinchMultiplier = 1.0;
+        const tempPos = new THREE.Vector3();
+        const REPEL_RADIUS = 10, REPEL_STRENGTH = 35; 
 
         function animate() {
             requestAnimationFrame(animate);
@@ -315,62 +307,49 @@
             const net = networks[activeNetworkKey];
             if (!net) return;
 
-            if (inputMode === 'mouse' && mousePos.active) {
-                camera.position.x += (mouseNDC.x * 20 - camera.position.x) * 0.05;
-                camera.position.y += (mouseNDC.y * 20 - camera.position.y) * 0.05;
-                camera.lookAt(scene.position);
-            } else {
-                camera.position.x += (0 - camera.position.x) * 0.05;
-                camera.position.y += (0 - camera.position.y) * 0.05;
-                camera.lookAt(scene.position);
-            }
+            // Camera follow logic
+            const camTargetX = (inputMode === 'mouse' && mousePos.active) ? mouseNDC.x * 20 : 0;
+            const camTargetY = (inputMode === 'mouse' && mousePos.active) ? mouseNDC.y * 20 : 0;
+            camera.position.x += (camTargetX - camera.position.x) * 0.05;
+            camera.position.y += (camTargetY - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
 
             net.group.rotation.set(Math.cos(time * 0.15) * 0.1, Math.sin(time * 0.3) * 0.2, 0);
-            
-            // Smoother, less flashy data flow opacity
             net.lines.material.opacity = 0.15 + (Math.sin(time * 4) * 0.1); 
-
             pinchMultiplier += (targetPinchMultiplier - pinchMultiplier) * 0.1;
 
             for (let i = 0; i < net.count; i++) {
                 const pData = net.particlesData[i];
-                
-                tempPosition.setFromMatrixPosition(net.originalMatrices[i]);
-                tempPosition.multiplyScalar(pinchMultiplier);
+                tempPos.setFromMatrixPosition(net.originalMatrices[i]).multiplyScalar(pinchMultiplier);
 
                 let isHovered = false;
-
                 if (inputMode === 'mouse' && mousePos.active) {
-                    const dx = tempPosition.x - mouseWorldPos.x;
-                    const dy = tempPosition.y - mouseWorldPos.y;
+                    const dx = tempPos.x - mouseWorldPos.x, dy = tempPos.y - mouseWorldPos.y;
                     const dist = Math.sqrt(dx*dx + dy*dy);
 
                     if (dist < REPEL_RADIUS) {
                         isHovered = true;
                         const force = Math.pow((REPEL_RADIUS - dist) / REPEL_RADIUS, 1.5); 
-                        tempPosition.x += (dx / dist) * force * REPEL_STRENGTH;
-                        tempPosition.y += (dy / dist) * force * REPEL_STRENGTH;
-                        tempPosition.z += force * 10; 
+                        tempPos.x += (dx / dist) * force * REPEL_STRENGTH;
+                        tempPos.y += (dy / dist) * force * REPEL_STRENGTH;
+                        tempPos.z += force * 10; 
                     }
                 }
 
-                tempPosition.x += Math.sin(time * 2 + pData.phaseX) * 0.5 * pinchMultiplier;
-                tempPosition.y += Math.cos(time * 2 + pData.phaseY) * 0.5 * pinchMultiplier;
+                tempPos.x += Math.sin(time * 2 + pData.phaseX) * 0.5 * pinchMultiplier;
+                tempPos.y += Math.cos(time * 2 + pData.phaseY) * 0.5 * pinchMultiplier;
 
-                dummy.position.copy(tempPosition);
-                dummy.scale.set(pData.scale, pData.scale, pData.scale);
+                dummy.position.copy(tempPos);
+                dummy.scale.setScalar(pData.scale);
                 dummy.updateMatrix();
 
                 net.mesh.setMatrixAt(i, dummy.matrix);
-                net.currentPositionsArray[i*3] = tempPosition.x;
-                net.currentPositionsArray[i*3+1] = tempPosition.y;
-                net.currentPositionsArray[i*3+2] = tempPosition.z;
+                net.currentPositions[i*3] = tempPos.x;
+                net.currentPositions[i*3+1] = tempPos.y;
+                net.currentPositions[i*3+2] = tempPos.z;
 
                 if(isHovered) {
-                    color.copy(net.targetColors[i]);
-                    // Reduced multiplier from 1.5 to 1.15. 
-                    // This creates a very subtle brightening without washing out the actual color.
-                    color.multiplyScalar(1.15); 
+                    color.copy(net.targetColors[i]).multiplyScalar(1.15); 
                     net.mesh.setColorAt(i, color);
                 } else {
                     net.mesh.setColorAt(i, net.targetColors[i]); 
@@ -383,21 +362,14 @@
             const linePositions = net.lines.geometry.attributes.position.array;
             for(let c = 0; c < net.lineIndices.length; c++) {
                 const nodeIdx = net.lineIndices[c]; 
-                linePositions[c*3]     = net.currentPositionsArray[nodeIdx*3];    
-                linePositions[c*3 + 1] = net.currentPositionsArray[nodeIdx*3 + 1]; 
-                linePositions[c*3 + 2] = net.currentPositionsArray[nodeIdx*3 + 2]; 
+                linePositions[c*3]     = net.currentPositions[nodeIdx*3];    
+                linePositions[c*3 + 1] = net.currentPositions[nodeIdx*3 + 1]; 
+                linePositions[c*3 + 2] = net.currentPositions[nodeIdx*3 + 2]; 
             }
             net.lines.geometry.attributes.position.needsUpdate = true;
 
             composer.render();
         }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            composer.setSize(window.innerWidth, window.innerHeight);
-        });
     </script>
 </body>
 </html>
