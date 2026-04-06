@@ -2,11 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Web3 Ambient Architectures</title>
+    
+    <meta name="title" content="Web3 Ambient Architectures">
+    <meta name="description" content="An immersive 3D visualization of decentralized networks. Track the data streams using your touch or AI hand-tracking.">
+
     <style>
-        body { margin: 0; overflow: hidden; background-color: #010102; font-family: monospace; color: #8a8a9a; user-select: none; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; background-color: #010102; font-family: monospace; color: #8a8a9a; user-select: none; touch-action: none; }
+        canvas { display: block; outline: none; }
         #webcamVideo { display: none; }
         
         #ui-panel {
@@ -22,7 +26,7 @@
         .tab-row.no-border { border-bottom: none; margin-bottom: 0; }
         .tab-btn {
             background: transparent; border: 1px solid #2a2a3a; color: #6a6a7a;
-            padding: 5px 10px; border-radius: 4px; cursor: pointer; font-family: monospace;
+            padding: 8px 10px; border-radius: 4px; cursor: pointer; font-family: monospace;
             transition: all 0.3s ease; flex-grow: 1; text-align: center;
         }
         .tab-btn:hover { background: rgba(60, 60, 80, 0.3); color: #8a8a9a; }
@@ -34,9 +38,15 @@
         #loading-overlay {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             font-size: 18px; color: #00cccc; text-shadow: 0 0 10px rgba(0,204,204,0.5); z-index: 20;
-            animation: pulse 1.5s infinite;
+            animation: pulse 1.5s infinite; text-align: center; width: 100%;
         }
         @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        /* Mobile Responsive adjustments */
+        @media (max-width: 600px) {
+            #ui-panel { top: 10px; left: 10px; right: 10px; min-width: auto; padding: 10px; font-size: 11px; }
+            .tab-btn { padding: 6px 5px; font-size: 10px; }
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
@@ -59,7 +69,7 @@
         </div>
         <div class="tab-row no-border" id="input-tabs">
             <button class="tab-btn active" id="btn-camera" onclick="switchInput('camera')">📷 CAMERA</button>
-            <button class="tab-btn" id="btn-mouse" onclick="switchInput('mouse')">🖱️ MOUSE</button>
+            <button class="tab-btn" id="btn-mouse" onclick="switchInput('mouse')">👆 TOUCH/MOUSE</button>
         </div>
         <hr style="border-color: #2a2a3a; margin: 8px 0;">
         
@@ -70,7 +80,7 @@
         <div style="margin-top: 8px;">STATUS: <span class="highlight" id="gesture-status">Searching...</span></div>
     </div>
 
-    <video id="webcamVideo" autoplay playsinline></video>
+    <video id="webcamVideo" autoplay playsinline webkit-playsinline></video>
 
     <script>
         // --- 1. DOM Elements ---
@@ -89,7 +99,8 @@
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.z = 140; 
         
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // CRITICAL FOR MOBILE GPU
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setClearColor(0x010102, 1); 
         document.body.appendChild(renderer.domElement);
@@ -100,6 +111,7 @@
         scene.add(dirLight);
 
         const renderScene = new THREE.RenderPass(scene, camera);
+        // Slightly reduced bloom radius for mobile perf
         const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.25, 0.25);
         
         const composer = new THREE.EffectComposer(renderer);
@@ -276,7 +288,7 @@
         });
         const camera_mp = new Camera(uiElements.video, { onFrame: async () => { await hands.send({image: uiElements.video}); }, width: 640, height: 480 });
 
-        // Mouse Events
+        // Mouse Events (Desktop)
         window.addEventListener('mousemove', (e) => {
             if(inputMode !== 'mouse') return;
             mousePos.active = true;
@@ -287,6 +299,19 @@
         window.addEventListener('mousedown', () => { if(inputMode === 'mouse') { targetPinchMultiplier = 2.5; uiElements.status.innerText = "Magnetic Burst"; }});
         window.addEventListener('mouseup', () => { if(inputMode === 'mouse') { targetPinchMultiplier = 1.0; uiElements.status.innerText = "Magnetic Hover"; }});
         window.addEventListener('mouseleave', () => { if(inputMode === 'mouse') { mousePos.active = false; targetPinchMultiplier = 1.0; uiElements.status.innerText = "Standby"; }});
+
+        // Touch Events (Mobile Support)
+        const handleTouchMove = (e) => {
+            if(inputMode !== 'mouse' || e.touches.length === 0) return;
+            mousePos.active = true;
+            mouseNDC.set((e.touches[0].clientX / window.innerWidth) * 2 - 1, -(e.touches[0].clientY / window.innerHeight) * 2 + 1);
+            raycaster.setFromCamera(mouseNDC, camera);
+            raycaster.ray.intersectPlane(zeroPlane, mouseWorldPos);
+        };
+        window.addEventListener('touchstart', (e) => { if(inputMode === 'mouse') { targetPinchMultiplier = 2.5; uiElements.status.innerText = "Magnetic Burst"; handleTouchMove(e); }});
+        window.addEventListener('touchmove', handleTouchMove);
+        window.addEventListener('touchend', () => { if(inputMode === 'mouse') { targetPinchMultiplier = 1.0; mousePos.active = false; uiElements.status.innerText = "Standby"; }});
+
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
