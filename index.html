@@ -31,9 +31,25 @@
         }
         .tab-btn:hover { background: rgba(60, 60, 80, 0.3); color: #8a8a9a; }
         .tab-btn.active { border-color: #00cccc; color: #fff; background: rgba(0, 204, 204, 0.1); box-shadow: 0 0 10px rgba(0,204,204,0.2); }
+        .tab-btn:focus-visible { outline: 2px solid #00cccc; outline-offset: 2px; }
 
         .highlight { color: #00cccc; text-shadow: 0 0 5px rgba(0,204,204,0.3); }
         .pink { color: #6a6a7a; }
+
+        .content-section { display: none; margin-top: 12px; max-height: 32vh; overflow-y: auto; padding-right: 4px; }
+        .content-section.active { display: block; }
+        .section-title { margin: 0 0 4px; font-size: 14px; color: #f4f4fa; }
+        .section-copy { margin: 0 0 10px; color: #8a8a9a; }
+        .games-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+        .game-card {
+            border: 1px solid #2a2a3a;
+            border-radius: 6px;
+            background: rgba(12, 12, 22, 0.75);
+            padding: 8px;
+        }
+        .game-card h3 { margin: 0 0 4px; font-size: 12px; color: #f4f4fa; }
+        .game-card p { margin: 0 0 6px; color: #8a8a9a; font-size: 11px; }
+        .game-tag { color: #00cccc; font-size: 10px; letter-spacing: 0.04em; }
         
         #loading-overlay {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -46,6 +62,8 @@
         @media (max-width: 600px) {
             #ui-panel { top: 10px; left: 10px; right: 10px; min-width: auto; padding: 10px; font-size: 11px; }
             .tab-btn { padding: 6px 5px; font-size: 10px; }
+            .content-section { max-height: 27vh; }
+            .games-grid { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -75,13 +93,46 @@
             <button class="tab-btn active" id="btn-camera" onclick="switchInput('camera')">📷 CAMERA</button>
             <button class="tab-btn" id="btn-mouse" onclick="switchInput('mouse')">👆 TOUCH/MOUSE</button>
         </div>
+        <div class="tab-row no-border" id="menu-tabs" role="tablist" aria-label="Information sections">
+            <button class="tab-btn active" id="btn-overview" role="tab" aria-selected="true" aria-controls="section-overview" onclick="switchSection('overview')">OVERVIEW</button>
+            <button class="tab-btn" id="btn-games" role="tab" aria-selected="false" aria-controls="section-games" onclick="switchSection('games')">GAMES</button>
+        </div>
         <hr style="border-color: #2a2a3a; margin: 8px 0;">
-        
-        <div><span class="pink">const</span> state = {</div>
-        <div>&nbsp;&nbsp;node: <span class="highlight" id="active-node-text">'startale'</span>,</div>
-        <div>&nbsp;&nbsp;engine: <span class="highlight">'ambient_bloom'</span></div>
-        <div>};</div>
-        <div style="margin-top: 8px;">STATUS: <span class="highlight" id="gesture-status">Searching...</span></div>
+
+        <section id="section-overview" class="content-section active" role="tabpanel" aria-labelledby="btn-overview">
+            <div><span class="pink">const</span> state = {</div>
+            <div>&nbsp;&nbsp;node: <span class="highlight" id="active-node-text">'startale'</span>,</div>
+            <div>&nbsp;&nbsp;engine: <span class="highlight">'ambient_bloom'</span></div>
+            <div>};</div>
+            <div style="margin-top: 8px;">STATUS: <span class="highlight" id="gesture-status">Searching...</span></div>
+        </section>
+
+        <section id="section-games" class="content-section" role="tabpanel" aria-labelledby="btn-games">
+            <h2 class="section-title">Games on SoneiumEco</h2>
+            <p class="section-copy">Discover upcoming ecosystem titles and prototypes built for immersive onchain play.</p>
+            <div class="games-grid">
+                <article class="game-card">
+                    <h3>Neon Drift Arena</h3>
+                    <p>Fast multiplayer racing concept with wallet-based progression.</p>
+                    <span class="game-tag">PLACEHOLDER ENTRY</span>
+                </article>
+                <article class="game-card">
+                    <h3>Chain Relic Quest</h3>
+                    <p>Adventure loop where relic ownership is secured onchain.</p>
+                    <span class="game-tag">PLACEHOLDER ENTRY</span>
+                </article>
+                <article class="game-card">
+                    <h3>Orbit Tactics</h3>
+                    <p>Turn-based strategy prototype focused on seasonal tournaments.</p>
+                    <span class="game-tag">PLACEHOLDER ENTRY</span>
+                </article>
+                <article class="game-card">
+                    <h3>Pixel Forge League</h3>
+                    <p>Crafting and PvP concept designed for community-built arenas.</p>
+                    <span class="game-tag">PLACEHOLDER ENTRY</span>
+                </article>
+            </div>
+        </section>
     </div>
 
     <video id="webcamVideo" autoplay playsinline webkit-playsinline></video>
@@ -269,6 +320,17 @@
             document.getElementById(`btn-${mode}`).classList.add('active');
             targetPinchMultiplier = 1.0; handPos.active = false; mousePos.active = false;
             uiElements.status.innerText = mode === 'camera' ? "Searching..." : "Ready";
+        };
+
+        window.switchSection = (sectionName) => {
+            document.querySelectorAll('#menu-tabs .tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.setAttribute('aria-selected', 'false');
+            });
+            document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+            document.getElementById(`btn-${sectionName}`).classList.add('active');
+            document.getElementById(`btn-${sectionName}`).setAttribute('aria-selected', 'true');
+            document.getElementById(`section-${sectionName}`).classList.add('active');
         };
 
         // MediaPipe Integration
