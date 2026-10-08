@@ -4,48 +4,251 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Web3 Ambient Architectures</title>
-    
+
     <meta name="title" content="Web3 Ambient Architectures">
     <meta name="description" content="An immersive 3D visualization of decentralized networks. Track the data streams using your touch or AI hand-tracking.">
 
     <style>
-        body { margin: 0; overflow: hidden; background-color: #010102; font-family: monospace; color: #8a8a9a; user-select: none; touch-action: none; }
+        :root {
+            --bg-main: rgba(5, 5, 10, 0.82);
+            --bg-elevated: rgba(15, 15, 28, 0.9);
+            --border: #2a2a3a;
+            --text-muted: #8a8a9a;
+            --text-soft: #6a6a7a;
+            --accent: #00cccc;
+            --startale: #6f9fff;
+            --soneium: #f77cff;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #010102;
+            font-family: monospace;
+            color: var(--text-muted);
+            user-select: none;
+            touch-action: none;
+        }
+
         canvas { display: block; outline: none; }
         #webcamVideo { display: none; }
-        
+
+        .menu-toggle {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 18;
+            border: 1px solid var(--border);
+            background: var(--bg-main);
+            color: #d8fefe;
+            border-radius: 10px;
+            padding: 10px 12px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            letter-spacing: 0.04em;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            touch-action: manipulation;
+        }
+
+        .menu-toggle:focus-visible,
+        .tab-btn:focus-visible,
+        .menu-view-btn:focus-visible,
+        .ttt-cell:focus-visible,
+        .game-action:focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+
         #ui-panel {
-            position: absolute; top: 20px; left: 20px; z-index: 10;
-            background: rgba(5, 5, 10, 0.7);
-            border: 1px solid #2a2a3a; border-radius: 8px;
-            padding: 15px; font-size: 12px; line-height: 1.6;
-            backdrop-filter: blur(8px); box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-            min-width: 280px; display: none;
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 16;
+            width: min(360px, calc(100vw - 32px));
+            max-height: calc(100vh - 32px);
+            overflow-y: auto;
+            background: var(--bg-main);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            font-size: 12px;
+            line-height: 1.6;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+            transform: translateX(calc(-100% - 24px));
+            transition: transform 0.25s ease;
+            display: none;
+            pointer-events: auto;
+            touch-action: pan-y;
         }
-        
-        .tab-row { display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid #2a2a3a; padding-bottom: 10px; }
+
+        #ui-panel.is-open { transform: translateX(0); }
+
+        #menu-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 15;
+            background: rgba(0, 0, 0, 0.45);
+            display: none;
+        }
+
+        #menu-backdrop.show { display: block; }
+
+        .menu-view-toggle {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .menu-view-btn,
+        .tab-btn,
+        .ttt-cell,
+        .game-action {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-soft);
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s ease;
+            touch-action: manipulation;
+        }
+
+        .menu-view-btn,
+        .tab-btn,
+        .game-action {
+            padding: 9px 10px;
+            text-align: center;
+        }
+
+        .tab-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
         .tab-row.no-border { border-bottom: none; margin-bottom: 0; }
-        .tab-btn {
-            background: transparent; border: 1px solid #2a2a3a; color: #6a6a7a;
-            padding: 8px 10px; border-radius: 4px; cursor: pointer; font-family: monospace;
-            transition: all 0.3s ease; flex-grow: 1; text-align: center;
-        }
-        .tab-btn:hover { background: rgba(60, 60, 80, 0.3); color: #8a8a9a; }
-        .tab-btn.active { border-color: #00cccc; color: #fff; background: rgba(0, 204, 204, 0.1); box-shadow: 0 0 10px rgba(0,204,204,0.2); }
+        .tab-row .tab-btn { flex: 1 1 100px; min-height: 40px; }
 
-        .highlight { color: #00cccc; text-shadow: 0 0 5px rgba(0,204,204,0.3); }
-        .pink { color: #6a6a7a; }
-        
+        .menu-view-btn:hover,
+        .tab-btn:hover,
+        .ttt-cell:hover,
+        .game-action:hover {
+            background: rgba(60, 60, 80, 0.35);
+            color: #d4d4e2;
+        }
+
+        .menu-view-btn.active,
+        .tab-btn.active,
+        .game-action.primary {
+            border-color: var(--accent);
+            color: #ffffff;
+            background: rgba(0, 204, 204, 0.12);
+            box-shadow: 0 0 10px rgba(0, 204, 204, 0.25);
+        }
+
+        .highlight { color: var(--accent); text-shadow: 0 0 5px rgba(0, 204, 204, 0.35); }
+        .pink { color: var(--text-soft); }
+
+        .menu-view[hidden] { display: none; }
+
+        .network-vs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+        }
+
+        .player-card {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 8px;
+            background: rgba(10, 10, 20, 0.6);
+        }
+
+        .player-card img {
+            width: 26px;
+            height: 26px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #3a3a50;
+        }
+
+        .player-card.startale { border-color: rgba(111, 159, 255, 0.5); }
+        .player-card.soneium { border-color: rgba(247, 124, 255, 0.5); }
+
+        .player-card strong { display: block; color: #e4e5f2; font-size: 12px; }
+
+        #ttt-board {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(54px, 1fr));
+            gap: 8px;
+            width: min(300px, 100%);
+            margin: 12px auto 8px;
+        }
+
+        .ttt-cell {
+            min-height: 56px;
+            font-size: 24px;
+            font-weight: 700;
+            color: #f2f3fa;
+            background: rgba(7, 7, 15, 0.85);
+        }
+
+        .ttt-cell.startale-mark { color: var(--startale); }
+        .ttt-cell.soneium-mark { color: var(--soneium); }
+        .ttt-cell.win { box-shadow: 0 0 12px rgba(0, 204, 204, 0.6); border-color: var(--accent); }
+
+        .game-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        .game-controls .game-action { flex: 1 1 120px; min-height: 38px; }
+
         #loading-overlay {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-size: 18px; color: #00cccc; text-shadow: 0 0 10px rgba(0,204,204,0.5); z-index: 20;
-            animation: pulse 1.5s infinite; text-align: center; width: 100%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            color: var(--accent);
+            text-shadow: 0 0 10px rgba(0, 204, 204, 0.5);
+            z-index: 20;
+            animation: pulse 1.5s infinite;
+            text-align: center;
+            width: 100%;
         }
-        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 
-        /* Mobile Responsive adjustments */
-        @media (max-width: 600px) {
-            #ui-panel { top: 10px; left: 10px; right: 10px; min-width: auto; padding: 10px; font-size: 11px; }
-            .tab-btn { padding: 6px 5px; font-size: 10px; }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        @media (max-width: 900px) {
+            .menu-toggle { top: 10px; left: 10px; font-size: 11px; }
+            #ui-panel {
+                top: 10px;
+                left: 10px;
+                width: min(360px, calc(100vw - 20px));
+                max-height: calc(100vh - 20px);
+                font-size: 11px;
+            }
+        }
+
+        @media (min-width: 901px) {
+            #menu-backdrop.show { display: none; }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -58,347 +261,621 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
     <script>
-      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
     </script>
     <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
-    <div id="loading-overlay">Syncing Ambient Architectures...</div>
+<div id="loading-overlay">Syncing Ambient Architectures...</div>
 
-    <div id="ui-panel">
-        <div class="tab-row" id="network-tabs">
-            <button class="tab-btn active" onclick="switchNetwork('startale')">STARTALE</button>
-            <button class="tab-btn" onclick="switchNetwork('soneium')">SONEIUM</button>
-            <button class="tab-btn" onclick="switchNetwork('astar')">ASTAR</button>
+<button id="menu-toggle" class="menu-toggle" type="button" aria-controls="ui-panel" aria-expanded="false" aria-label="Open menu and game panel">☰ MENU</button>
+<div id="menu-backdrop" aria-hidden="true"></div>
+
+<aside id="ui-panel" aria-label="Network controls and games menu">
+    <div class="menu-view-toggle" role="tablist" aria-label="Panel sections">
+        <button class="menu-view-btn active" type="button" role="tab" aria-selected="true" data-view="controls">CONTROLS</button>
+        <button class="menu-view-btn" type="button" role="tab" aria-selected="false" data-view="games">GAMES</button>
+    </div>
+
+    <section id="controls-view" class="menu-view" data-view-panel="controls">
+        <div class="tab-row" id="network-tabs" aria-label="Network selection">
+            <button class="tab-btn active" type="button" data-network="startale">STARTALE</button>
+            <button class="tab-btn" type="button" data-network="soneium">SONEIUM</button>
+            <button class="tab-btn" type="button" data-network="astar">ASTAR</button>
         </div>
-        <div class="tab-row no-border" id="input-tabs">
-            <button class="tab-btn active" id="btn-camera" onclick="switchInput('camera')">📷 CAMERA</button>
-            <button class="tab-btn" id="btn-mouse" onclick="switchInput('mouse')">👆 TOUCH/MOUSE</button>
+        <div class="tab-row no-border" id="input-tabs" aria-label="Input mode selection">
+            <button class="tab-btn active" id="btn-camera" type="button" data-input="camera">📷 CAMERA</button>
+            <button class="tab-btn" id="btn-mouse" type="button" data-input="mouse">👆 TOUCH/MOUSE</button>
         </div>
         <hr style="border-color: #2a2a3a; margin: 8px 0;">
-        
+
         <div><span class="pink">const</span> state = {</div>
         <div>&nbsp;&nbsp;node: <span class="highlight" id="active-node-text">'startale'</span>,</div>
         <div>&nbsp;&nbsp;engine: <span class="highlight">'ambient_bloom'</span></div>
         <div>};</div>
         <div style="margin-top: 8px;">STATUS: <span class="highlight" id="gesture-status">Searching...</span></div>
-    </div>
+    </section>
 
-    <video id="webcamVideo" autoplay playsinline webkit-playsinline></video>
+    <section id="games-view" class="menu-view" data-view-panel="games" hidden>
+        <h2 style="margin: 0 0 6px; font-size: 14px; color: #eef2ff;">Tic Tac Toe: Network Duel</h2>
+        <p style="margin: 0; color: #9a9aad;">Startale plays <span class="highlight">X</span> and Soneium plays <span class="highlight">O</span>.</p>
 
-    <script>
-        // --- 1. DOM Elements ---
-        const uiElements = {
-            overlay: document.getElementById('loading-overlay'),
-            panel: document.getElementById('ui-panel'),
-            status: document.getElementById('gesture-status'),
-            nodeText: document.getElementById('active-node-text'),
-            video: document.getElementById('webcamVideo')
-        };
+        <div class="network-vs" aria-label="Game players and network branding">
+            <div class="player-card startale">
+                <img src="startale.jpg" alt="Startale logo">
+                <div><strong>Startale (X)</strong><span style="color: #9baeff;">Network A</span></div>
+            </div>
+            <div class="player-card soneium">
+                <img src="soneium.jpg" alt="Soneium logo">
+                <div><strong>Soneium (O)</strong><span style="color: #f3a3ff;">Network B</span></div>
+            </div>
+        </div>
 
-        // --- 2. Three.js & Post-Processing Setup ---
-        const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x010102, 0.004); 
-        
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 140; 
-        
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // CRITICAL FOR MOBILE GPU
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setClearColor(0x010102, 1); 
-        document.body.appendChild(renderer.domElement);
+        <div id="ttt-board" role="grid" aria-label="Tic Tac Toe board">
+            <button class="ttt-cell" type="button" data-cell="0" aria-label="Cell 1"></button>
+            <button class="ttt-cell" type="button" data-cell="1" aria-label="Cell 2"></button>
+            <button class="ttt-cell" type="button" data-cell="2" aria-label="Cell 3"></button>
+            <button class="ttt-cell" type="button" data-cell="3" aria-label="Cell 4"></button>
+            <button class="ttt-cell" type="button" data-cell="4" aria-label="Cell 5"></button>
+            <button class="ttt-cell" type="button" data-cell="5" aria-label="Cell 6"></button>
+            <button class="ttt-cell" type="button" data-cell="6" aria-label="Cell 7"></button>
+            <button class="ttt-cell" type="button" data-cell="7" aria-label="Cell 8"></button>
+            <button class="ttt-cell" type="button" data-cell="8" aria-label="Cell 9"></button>
+        </div>
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(2, 2, 2);
-        scene.add(dirLight);
+        <p id="ttt-status" class="highlight" aria-live="polite" style="margin: 8px 0 0;">Startale (X) turn</p>
+        <div class="game-controls">
+            <button id="ttt-reset" class="game-action primary" type="button">New Game</button>
+            <button id="ttt-clear" class="game-action" type="button">Clear Board</button>
+        </div>
+    </section>
+</aside>
 
-        const renderScene = new THREE.RenderPass(scene, camera);
-        // Slightly reduced bloom radius for mobile perf
-        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.25, 0.25);
-        
-        const composer = new THREE.EffectComposer(renderer);
-        composer.addPass(renderScene);
-        composer.addPass(bloomPass);
+<video id="webcamVideo" autoplay playsinline webkit-playsinline></video>
 
-        // --- 3. Network State ---
-        const networks = { startale: null, soneium: null, astar: null };
-        let activeNetworkKey = 'startale';
-        const dummy = new THREE.Object3D();
-        const color = new THREE.Color();
+<script>
+    // --- 1. DOM Elements ---
+    const uiElements = {
+        overlay: document.getElementById('loading-overlay'),
+        panel: document.getElementById('ui-panel'),
+        menuToggle: document.getElementById('menu-toggle'),
+        menuBackdrop: document.getElementById('menu-backdrop'),
+        status: document.getElementById('gesture-status'),
+        nodeText: document.getElementById('active-node-text'),
+        video: document.getElementById('webcamVideo'),
+        networkTabs: document.querySelectorAll('#network-tabs .tab-btn'),
+        inputTabs: document.querySelectorAll('#input-tabs .tab-btn'),
+        viewButtons: document.querySelectorAll('.menu-view-btn'),
+        views: document.querySelectorAll('.menu-view')
+    };
 
-        // --- 4. Image Processing Engine ---
-        function buildNetwork(imageSrc, isColorExtracted, bgType = 'dark') {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.src = imageSrc; 
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    const size = 140;
-                    canvas.width = size; canvas.height = size;
-                    ctx.drawImage(img, 0, 0, size, size);
-                    const imgData = ctx.getImageData(0, 0, size, size).data;
+    // --- 2. Three.js & Post-Processing Setup ---
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x010102, 0.004);
 
-                    const instancingData = [], particlesData = [], originalMatrices = [];
-                    const targetColors = [], lineIndices = [];
-                    const gridMap = new Map(); 
-                    let nodeIndex = 0;
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 140;
 
-                    for(let y = 0; y < size; y++) {
-                        for(let x = 0; x < size; x++) {
-                            const i = (y * size + x) * 4;
-                            const [r, g, b] = [imgData[i], imgData[i+1], imgData[i+2]];
-                            
-                            const isLogoPixel = bgType === 'dark' ? ((r + g + b) / 3) > 20 : (r < 240 || g < 240 || b < 240); 
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x010102, 1);
+    document.body.appendChild(renderer.domElement);
 
-                            if (isLogoPixel) {
-                                const pX = (x - size / 2) * 1.1;
-                                const pY = -(y - size / 2) * 1.1;
-                                const pZ = (Math.random() - 0.5) * 4; 
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(2, 2, 2);
+    scene.add(dirLight);
 
-                                if (isColorExtracted) {
-                                    color.setRGB(r/255, g/255, b/255);
-                                } else {
-                                    const normX = x / size;
-                                    color.setRGB(0.1 + normX * 0.8, 0.9 - normX * 0.5, 1.0);
-                                }
-                                
-                                instancingData.push({ pos: new THREE.Vector3(pX, pY, pZ), color: color.clone() });
-                                particlesData.push({ phaseX: Math.random() * Math.PI * 2, phaseY: Math.random() * Math.PI * 2, scale: 0.8 + Math.random() * 0.4 });
-                                gridMap.set(`${x},${y}`, nodeIndex++);
+    const renderScene = new THREE.RenderPass(scene, camera);
+    const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.25, 0.25);
+
+    const composer = new THREE.EffectComposer(renderer);
+    composer.addPass(renderScene);
+    composer.addPass(bloomPass);
+
+    // --- 3. Network State ---
+    const networks = { startale: null, soneium: null, astar: null };
+    let activeNetworkKey = 'startale';
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+
+    // --- 4. Responsive Menu ---
+    const mobileQuery = window.matchMedia('(max-width: 900px)');
+    let menuOpen = false;
+
+    function setMenuOpen(open) {
+        menuOpen = open;
+        uiElements.panel.classList.toggle('is-open', open);
+        uiElements.menuToggle.setAttribute('aria-expanded', String(open));
+        uiElements.menuToggle.textContent = open ? '✕ CLOSE' : '☰ MENU';
+        uiElements.menuBackdrop.classList.toggle('show', open && mobileQuery.matches);
+    }
+
+    function applyMenuMode() {
+        setMenuOpen(!mobileQuery.matches);
+    }
+
+    uiElements.menuToggle.addEventListener('click', () => setMenuOpen(!menuOpen));
+    uiElements.menuBackdrop.addEventListener('click', () => setMenuOpen(false));
+    mobileQuery.addEventListener('change', applyMenuMode);
+    applyMenuMode();
+
+    function switchPanelView(viewName) {
+        uiElements.viewButtons.forEach((button) => {
+            const isActive = button.dataset.view === viewName;
+            button.classList.toggle('active', isActive);
+            button.setAttribute('aria-selected', String(isActive));
+        });
+
+        uiElements.views.forEach((view) => {
+            const isTarget = view.dataset.viewPanel === viewName;
+            view.hidden = !isTarget;
+        });
+    }
+
+    uiElements.viewButtons.forEach((button) => {
+        button.addEventListener('click', () => switchPanelView(button.dataset.view));
+    });
+
+    // --- 5. Image Processing Engine ---
+    function buildNetwork(imageSrc, isColorExtracted, bgType = 'dark') {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.src = imageSrc;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const size = 140;
+                canvas.width = size;
+                canvas.height = size;
+                ctx.drawImage(img, 0, 0, size, size);
+                const imgData = ctx.getImageData(0, 0, size, size).data;
+
+                const instancingData = [];
+                const particlesData = [];
+                const originalMatrices = [];
+                const targetColors = [];
+                const lineIndices = [];
+                const gridMap = new Map();
+                let nodeIndex = 0;
+
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        const i = (y * size + x) * 4;
+                        const [r, g, b] = [imgData[i], imgData[i + 1], imgData[i + 2]];
+
+                        const isLogoPixel = bgType === 'dark' ? ((r + g + b) / 3) > 20 : (r < 240 || g < 240 || b < 240);
+
+                        if (isLogoPixel) {
+                            const pX = (x - size / 2) * 1.1;
+                            const pY = -(y - size / 2) * 1.1;
+                            const pZ = (Math.random() - 0.5) * 4;
+
+                            if (isColorExtracted) {
+                                color.setRGB(r / 255, g / 255, b / 255);
+                            } else {
+                                const normX = x / size;
+                                color.setRGB(0.1 + normX * 0.8, 0.9 - normX * 0.5, 1.0);
                             }
+
+                            instancingData.push({ pos: new THREE.Vector3(pX, pY, pZ), color: color.clone() });
+                            particlesData.push({ phaseX: Math.random() * Math.PI * 2, phaseY: Math.random() * Math.PI * 2, scale: 0.8 + Math.random() * 0.4 });
+                            gridMap.set(`${x},${y}`, nodeIndex++);
                         }
                     }
+                }
 
-                    const count = instancingData.length;
-                    const currentPositions = new Float32Array(count * 3);
+                const count = instancingData.length;
+                const currentPositions = new Float32Array(count * 3);
 
-                    for(let y = 0; y < size; y++) {
-                        for(let x = 0; x < size; x++) {
-                            const currentIdx = gridMap.get(`${x},${y}`);
-                            if (currentIdx !== undefined) {
-                                const rightIdx = gridMap.get(`${x+1},${y}`);
-                                const bottomIdx = gridMap.get(`${x},${y+1}`);
-                                if (rightIdx !== undefined) lineIndices.push(currentIdx, rightIdx);
-                                if (bottomIdx !== undefined) lineIndices.push(currentIdx, bottomIdx);
-                            }
+                for (let y = 0; y < size; y++) {
+                    for (let x = 0; x < size; x++) {
+                        const currentIdx = gridMap.get(`${x},${y}`);
+                        if (currentIdx !== undefined) {
+                            const rightIdx = gridMap.get(`${x + 1},${y}`);
+                            const bottomIdx = gridMap.get(`${x},${y + 1}`);
+                            if (rightIdx !== undefined) lineIndices.push(currentIdx, rightIdx);
+                            if (bottomIdx !== undefined) lineIndices.push(currentIdx, bottomIdx);
                         }
                     }
+                }
 
-                    const mesh = new THREE.InstancedMesh(
-                        new THREE.BoxGeometry(0.7, 0.7, 0.7),
-                        new THREE.MeshLambertMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85 }),
-                        count
-                    );
-                    
-                    for (let i = 0; i < count; i++) {
-                        dummy.position.copy(instancingData[i].pos);
-                        dummy.updateMatrix();
-                        mesh.setMatrixAt(i, dummy.matrix);
-                        originalMatrices.push(dummy.matrix.clone());
-                        mesh.setColorAt(i, instancingData[i].color);
-                        targetColors.push(instancingData[i].color.clone());
-                    }
+                const mesh = new THREE.InstancedMesh(
+                    new THREE.BoxGeometry(0.7, 0.7, 0.7),
+                    new THREE.MeshLambertMaterial({ color: 0xffffff, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85 }),
+                    count
+                );
 
-                    const lineGeo = new THREE.BufferGeometry();
-                    lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lineIndices.length * 3), 3));
-                    const lines = new THREE.LineSegments(
-                        lineGeo,
-                        new THREE.LineBasicMaterial({ color: isColorExtracted ? 0xaa66dd : 0x00cccc, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })
-                    );
-                    
-                    const group = new THREE.Group();
-                    group.add(mesh); group.add(lines);
-                    group.visible = false; 
-                    scene.add(group);
+                for (let i = 0; i < count; i++) {
+                    dummy.position.copy(instancingData[i].pos);
+                    dummy.updateMatrix();
+                    mesh.setMatrixAt(i, dummy.matrix);
+                    originalMatrices.push(dummy.matrix.clone());
+                    mesh.setColorAt(i, instancingData[i].color);
+                    targetColors.push(instancingData[i].color.clone());
+                }
 
-                    resolve({ group, mesh, lines, particlesData, originalMatrices, targetColors, lineIndices, currentPositions, count });
-                };
-                img.onerror = reject;
-            });
-        }
+                const lineGeo = new THREE.BufferGeometry();
+                lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(lineIndices.length * 3), 3));
+                const lines = new THREE.LineSegments(
+                    lineGeo,
+                    new THREE.LineBasicMaterial({ color: isColorExtracted ? 0xaa66dd : 0x00cccc, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false })
+                );
 
-        // --- 5. Initialization ---
-        Promise.all([
-            buildNetwork('startale.jpg', false, 'dark'), 
-            buildNetwork('soneium.jpg', true, 'dark'),    
-            buildNetwork('astar.jpg', true, 'dark')
-        ]).then((results) => {
-            networks.startale = results[0]; 
-            networks.soneium = results[1]; 
-            networks.astar = results[2];
-            
-            uiElements.overlay.style.display = 'none';
-            uiElements.panel.style.display = 'block';
+                const group = new THREE.Group();
+                group.add(mesh);
+                group.add(lines);
+                group.visible = false;
+                scene.add(group);
+
+                resolve({ group, mesh, lines, particlesData, originalMatrices, targetColors, lineIndices, currentPositions, count });
+            };
+            img.onerror = reject;
+        });
+    }
+
+    // --- 6. Initialization ---
+    Promise.all([
+        buildNetwork('startale.jpg', false, 'dark'),
+        buildNetwork('soneium.jpg', true, 'dark'),
+        buildNetwork('astar.jpg', true, 'dark')
+    ]).then((results) => {
+        networks.startale = results[0];
+        networks.soneium = results[1];
+        networks.astar = results[2];
+
+        uiElements.overlay.style.display = 'none';
+        uiElements.panel.style.display = 'block';
+        if (networks.startale?.group) {
             networks.startale.group.visible = true;
-            
-            camera_mp.start();
-            animate();
-        }).catch(err => {
-            uiElements.overlay.innerText = "Error loading image assets.";
-            console.error("Asset load failed:", err);
-        });
-
-        // --- 6. Input & Interactions ---
-        let inputMode = 'camera', targetPinchMultiplier = 1.0;
-        const handPos = { x: 0, y: 0, active: false };
-        const mousePos = { active: false };
-        const mouseNDC = new THREE.Vector2(); 
-        const mouseWorldPos = new THREE.Vector3();
-        const raycaster = new THREE.Raycaster();
-        const zeroPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); 
-
-        // UI Controllers
-        window.switchNetwork = (networkName) => {
-            document.querySelectorAll('#network-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
-            uiElements.nodeText.innerText = `'${networkName}'`;
-
-            if (activeNetworkKey !== networkName) {
-                networks[activeNetworkKey].group.visible = false;
-                activeNetworkKey = networkName;
-                networks[activeNetworkKey].group.visible = true;
-            }
-        };
-
-        window.switchInput = (mode) => {
-            inputMode = mode;
-            document.querySelectorAll('#input-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(`btn-${mode}`).classList.add('active');
-            targetPinchMultiplier = 1.0; handPos.active = false; mousePos.active = false;
-            uiElements.status.innerText = mode === 'camera' ? "Searching..." : "Ready";
-        };
-
-        // MediaPipe Integration
-        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-        hands.onResults((results) => {
-            if(inputMode !== 'camera') return; 
-            if (results.multiHandLandmarks?.length > 0) {
-                handPos.active = true;
-                const lm = results.multiHandLandmarks[0];
-                handPos.x = (lm[8].x - 0.5) * targetPinchMultiplier * 140; 
-                handPos.y = -(lm[8].y - 0.5) * targetPinchMultiplier * 140;
-
-                const dx = lm[8].x - lm[4].x, dy = lm[8].y - lm[4].y;
-                targetPinchMultiplier = 1.0 + (Math.sqrt(dx*dx + dy*dy) * 14);
-                uiElements.status.innerText = targetPinchMultiplier > 1.8 ? "Elastic Stretch" : "Tracking Hand";
-            } else {
-                handPos.active = false; targetPinchMultiplier = 1.0; 
-                uiElements.status.innerText = "Camera Active (No Hand)";
-            }
-        });
-        const camera_mp = new Camera(uiElements.video, { onFrame: async () => { await hands.send({image: uiElements.video}); }, width: 640, height: 480 });
-
-        // Mouse Events (Desktop)
-        window.addEventListener('mousemove', (e) => {
-            if(inputMode !== 'mouse') return;
-            mousePos.active = true;
-            mouseNDC.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
-            raycaster.setFromCamera(mouseNDC, camera);
-            raycaster.ray.intersectPlane(zeroPlane, mouseWorldPos);
-        });
-        window.addEventListener('mousedown', () => { if(inputMode === 'mouse') { targetPinchMultiplier = 2.5; uiElements.status.innerText = "Magnetic Burst"; }});
-        window.addEventListener('mouseup', () => { if(inputMode === 'mouse') { targetPinchMultiplier = 1.0; uiElements.status.innerText = "Magnetic Hover"; }});
-        window.addEventListener('mouseleave', () => { if(inputMode === 'mouse') { mousePos.active = false; targetPinchMultiplier = 1.0; uiElements.status.innerText = "Standby"; }});
-
-        // Touch Events (Mobile Support)
-        const handleTouchMove = (e) => {
-            if(inputMode !== 'mouse' || e.touches.length === 0) return;
-            mousePos.active = true;
-            mouseNDC.set((e.touches[0].clientX / window.innerWidth) * 2 - 1, -(e.touches[0].clientY / window.innerHeight) * 2 + 1);
-            raycaster.setFromCamera(mouseNDC, camera);
-            raycaster.ray.intersectPlane(zeroPlane, mouseWorldPos);
-        };
-        window.addEventListener('touchstart', (e) => { if(inputMode === 'mouse') { targetPinchMultiplier = 2.5; uiElements.status.innerText = "Magnetic Burst"; handleTouchMove(e); }});
-        window.addEventListener('touchmove', handleTouchMove);
-        window.addEventListener('touchend', () => { if(inputMode === 'mouse') { targetPinchMultiplier = 1.0; mousePos.active = false; uiElements.status.innerText = "Standby"; }});
-
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            composer.setSize(window.innerWidth, window.innerHeight);
-        });
-
-        // --- 7. Animation Loop ---
-        let time = 0, pinchMultiplier = 1.0;
-        const tempPos = new THREE.Vector3();
-        const REPEL_RADIUS = 10, REPEL_STRENGTH = 35; 
-
-        function animate() {
-            requestAnimationFrame(animate);
-            time += 0.015;
-
-            const net = networks[activeNetworkKey];
-            if (!net) return;
-
-            // Camera follow logic
-            const camTargetX = (inputMode === 'mouse' && mousePos.active) ? mouseNDC.x * 20 : 0;
-            const camTargetY = (inputMode === 'mouse' && mousePos.active) ? mouseNDC.y * 20 : 0;
-            camera.position.x += (camTargetX - camera.position.x) * 0.05;
-            camera.position.y += (camTargetY - camera.position.y) * 0.05;
-            camera.lookAt(scene.position);
-
-            net.group.rotation.set(Math.cos(time * 0.15) * 0.1, Math.sin(time * 0.3) * 0.2, 0);
-            net.lines.material.opacity = 0.15 + (Math.sin(time * 4) * 0.1); 
-            pinchMultiplier += (targetPinchMultiplier - pinchMultiplier) * 0.1;
-
-            for (let i = 0; i < net.count; i++) {
-                const pData = net.particlesData[i];
-                tempPos.setFromMatrixPosition(net.originalMatrices[i]).multiplyScalar(pinchMultiplier);
-
-                let isHovered = false;
-                if (inputMode === 'mouse' && mousePos.active) {
-                    const dx = tempPos.x - mouseWorldPos.x, dy = tempPos.y - mouseWorldPos.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
-
-                    if (dist < REPEL_RADIUS) {
-                        isHovered = true;
-                        const force = Math.pow((REPEL_RADIUS - dist) / REPEL_RADIUS, 1.5); 
-                        tempPos.x += (dx / dist) * force * REPEL_STRENGTH;
-                        tempPos.y += (dy / dist) * force * REPEL_STRENGTH;
-                        tempPos.z += force * 10; 
-                    }
-                }
-
-                tempPos.x += Math.sin(time * 2 + pData.phaseX) * 0.5 * pinchMultiplier;
-                tempPos.y += Math.cos(time * 2 + pData.phaseY) * 0.5 * pinchMultiplier;
-
-                dummy.position.copy(tempPos);
-                dummy.scale.setScalar(pData.scale);
-                dummy.updateMatrix();
-
-                net.mesh.setMatrixAt(i, dummy.matrix);
-                net.currentPositions[i*3] = tempPos.x;
-                net.currentPositions[i*3+1] = tempPos.y;
-                net.currentPositions[i*3+2] = tempPos.z;
-
-                if(isHovered) {
-                    color.copy(net.targetColors[i]).multiplyScalar(1.15); 
-                    net.mesh.setColorAt(i, color);
-                } else {
-                    net.mesh.setColorAt(i, net.targetColors[i]); 
-                }
-            }
-
-            net.mesh.instanceMatrix.needsUpdate = true;
-            net.mesh.instanceColor.needsUpdate = true; 
-
-            const linePositions = net.lines.geometry.attributes.position.array;
-            for(let c = 0; c < net.lineIndices.length; c++) {
-                const nodeIdx = net.lineIndices[c]; 
-                linePositions[c*3]     = net.currentPositions[nodeIdx*3];    
-                linePositions[c*3 + 1] = net.currentPositions[nodeIdx*3 + 1]; 
-                linePositions[c*3 + 2] = net.currentPositions[nodeIdx*3 + 2]; 
-            }
-            net.lines.geometry.attributes.position.needsUpdate = true;
-
-            composer.render();
         }
-    </script>
+
+        camera_mp.start();
+        animate();
+    }).catch((err) => {
+        uiElements.overlay.innerText = 'Error loading image assets.';
+        console.error('Asset load failed:', err);
+    });
+
+    // --- 7. Input & Interactions ---
+    let inputMode = 'camera';
+    let targetPinchMultiplier = 1.0;
+    const handPos = { x: 0, y: 0, active: false };
+    const mousePos = { active: false };
+    const mouseNDC = new THREE.Vector2();
+    const mouseWorldPos = new THREE.Vector3();
+    const raycaster = new THREE.Raycaster();
+    const zeroPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+
+    function isUIEventTarget(target) {
+        return target instanceof Element && Boolean(target.closest('#ui-panel, #menu-toggle'));
+    }
+
+    function setNetworkButtonState(networkName) {
+        uiElements.networkTabs.forEach((btn) => {
+            btn.classList.toggle('active', btn.dataset.network === networkName);
+        });
+    }
+
+    function switchNetwork(networkName) {
+        const nextNetwork = networks[networkName];
+
+        if (!nextNetwork?.group) {
+            uiElements.status.innerText = 'Network data unavailable';
+            return;
+        }
+
+        const currentNetwork = networks[activeNetworkKey];
+        if (currentNetwork?.group && activeNetworkKey !== networkName) {
+            currentNetwork.group.visible = false;
+        }
+
+        activeNetworkKey = networkName;
+        nextNetwork.group.visible = true;
+        setNetworkButtonState(networkName);
+        uiElements.nodeText.innerText = `'${networkName}'`;
+    }
+
+    function switchInput(mode) {
+        inputMode = mode;
+        uiElements.inputTabs.forEach((btn) => btn.classList.toggle('active', btn.dataset.input === mode));
+        targetPinchMultiplier = 1.0;
+        handPos.active = false;
+        mousePos.active = false;
+        uiElements.status.innerText = mode === 'camera' ? 'Searching...' : 'Ready';
+    }
+
+    uiElements.networkTabs.forEach((button) => {
+        button.addEventListener('click', () => switchNetwork(button.dataset.network));
+    });
+
+    uiElements.inputTabs.forEach((button) => {
+        button.addEventListener('click', () => switchInput(button.dataset.input));
+    });
+
+    // MediaPipe Integration
+    const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    hands.onResults((results) => {
+        if (inputMode !== 'camera') return;
+        if (results.multiHandLandmarks?.length > 0) {
+            handPos.active = true;
+            const lm = results.multiHandLandmarks[0];
+            handPos.x = (lm[8].x - 0.5) * targetPinchMultiplier * 140;
+            handPos.y = -(lm[8].y - 0.5) * targetPinchMultiplier * 140;
+
+            const dx = lm[8].x - lm[4].x;
+            const dy = lm[8].y - lm[4].y;
+            targetPinchMultiplier = 1.0 + (Math.sqrt(dx * dx + dy * dy) * 14);
+            uiElements.status.innerText = targetPinchMultiplier > 1.8 ? 'Elastic Stretch' : 'Tracking Hand';
+        } else {
+            handPos.active = false;
+            targetPinchMultiplier = 1.0;
+            uiElements.status.innerText = 'Camera Active (No Hand)';
+        }
+    });
+
+    const camera_mp = new Camera(uiElements.video, {
+        onFrame: async () => {
+            await hands.send({ image: uiElements.video });
+        },
+        width: 640,
+        height: 480
+    });
+
+    // Mouse Events (Desktop)
+    window.addEventListener('mousemove', (e) => {
+        if (inputMode !== 'mouse' || isUIEventTarget(e.target)) return;
+        mousePos.active = true;
+        mouseNDC.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+        raycaster.setFromCamera(mouseNDC, camera);
+        raycaster.ray.intersectPlane(zeroPlane, mouseWorldPos);
+    });
+
+    window.addEventListener('mousedown', (e) => {
+        if (inputMode === 'mouse' && !isUIEventTarget(e.target)) {
+            targetPinchMultiplier = 2.5;
+            uiElements.status.innerText = 'Magnetic Burst';
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (inputMode === 'mouse') {
+            targetPinchMultiplier = 1.0;
+            uiElements.status.innerText = 'Magnetic Hover';
+        }
+    });
+
+    window.addEventListener('mouseleave', () => {
+        if (inputMode === 'mouse') {
+            mousePos.active = false;
+            targetPinchMultiplier = 1.0;
+            uiElements.status.innerText = 'Standby';
+        }
+    });
+
+    // Touch Events (Mobile Support)
+    const handleTouchMove = (e) => {
+        if (inputMode !== 'mouse' || e.touches.length === 0 || isUIEventTarget(e.target)) return;
+        mousePos.active = true;
+        mouseNDC.set((e.touches[0].clientX / window.innerWidth) * 2 - 1, -(e.touches[0].clientY / window.innerHeight) * 2 + 1);
+        raycaster.setFromCamera(mouseNDC, camera);
+        raycaster.ray.intersectPlane(zeroPlane, mouseWorldPos);
+    };
+
+    window.addEventListener('touchstart', (e) => {
+        if (inputMode === 'mouse' && !isUIEventTarget(e.target)) {
+            targetPinchMultiplier = 2.5;
+            uiElements.status.innerText = 'Magnetic Burst';
+            handleTouchMove(e);
+        }
+    });
+
+    window.addEventListener('touchmove', handleTouchMove);
+
+    window.addEventListener('touchend', () => {
+        if (inputMode === 'mouse') {
+            targetPinchMultiplier = 1.0;
+            mousePos.active = false;
+            uiElements.status.innerText = 'Standby';
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // --- 8. Tic Tac Toe ---
+    const gameCells = Array.from(document.querySelectorAll('.ttt-cell'));
+    const gameStatus = document.getElementById('ttt-status');
+    const gameResetButton = document.getElementById('ttt-reset');
+    const gameClearButton = document.getElementById('ttt-clear');
+
+    const gameSides = {
+        startale: { mark: 'X', label: 'Startale' },
+        soneium: { mark: 'O', label: 'Soneium' }
+    };
+
+    const winCombos = [
+        [0, 1, 2], [3, 4, 5], [6, 7, 8],
+        [0, 3, 6], [1, 4, 7], [2, 5, 8],
+        [0, 4, 8], [2, 4, 6]
+    ];
+
+    let boardState = Array(9).fill(null);
+    let activeSide = 'startale';
+    let gameLocked = false;
+
+    function setGameStatus(text) {
+        gameStatus.textContent = text;
+    }
+
+    function getWinner() {
+        for (const combo of winCombos) {
+            const [a, b, c] = combo;
+            if (boardState[a] && boardState[a] === boardState[b] && boardState[a] === boardState[c]) {
+                return combo;
+            }
+        }
+        return null;
+    }
+
+    function paintBoard(winningCombo = null) {
+        gameCells.forEach((cell, index) => {
+            const value = boardState[index];
+            cell.textContent = value || '';
+            cell.classList.remove('startale-mark', 'soneium-mark', 'win');
+            if (value === gameSides.startale.mark) cell.classList.add('startale-mark');
+            if (value === gameSides.soneium.mark) cell.classList.add('soneium-mark');
+            if (winningCombo?.includes(index)) cell.classList.add('win');
+            const labelValue = value ? value : 'empty';
+            cell.setAttribute('aria-label', `Cell ${index + 1}: ${labelValue}`);
+        });
+    }
+
+    function setNextTurn() {
+        const side = gameSides[activeSide];
+        setGameStatus(`${side.label} (${side.mark}) turn`);
+    }
+
+    function playCell(index) {
+        if (gameLocked || boardState[index]) return;
+
+        const side = gameSides[activeSide];
+        boardState[index] = side.mark;
+
+        const winningCombo = getWinner();
+        if (winningCombo) {
+            gameLocked = true;
+            paintBoard(winningCombo);
+            setGameStatus(`${side.label} (${side.mark}) wins!`);
+            return;
+        }
+
+        if (boardState.every(Boolean)) {
+            gameLocked = true;
+            paintBoard();
+            setGameStatus('Draw game. Start a new round.');
+            return;
+        }
+
+        activeSide = activeSide === 'startale' ? 'soneium' : 'startale';
+        paintBoard();
+        setNextTurn();
+    }
+
+    function resetGame(clearStarter = false) {
+        boardState = Array(9).fill(null);
+        gameLocked = false;
+        if (clearStarter) {
+            activeSide = 'startale';
+        }
+        paintBoard();
+        setNextTurn();
+    }
+
+    gameCells.forEach((cell) => {
+        cell.addEventListener('click', () => {
+            playCell(Number(cell.dataset.cell));
+        });
+    });
+
+    gameResetButton.addEventListener('click', () => {
+        activeSide = activeSide === 'startale' ? 'soneium' : 'startale';
+        resetGame();
+    });
+
+    gameClearButton.addEventListener('click', () => {
+        resetGame(true);
+    });
+
+    resetGame(true);
+
+    // --- 9. Animation Loop ---
+    let time = 0;
+    let pinchMultiplier = 1.0;
+    const tempPos = new THREE.Vector3();
+    const REPEL_RADIUS = 10;
+    const REPEL_STRENGTH = 35;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        time += 0.015;
+
+        const net = networks[activeNetworkKey];
+        if (!net) {
+            composer.render();
+            return;
+        }
+
+        const camTargetX = (inputMode === 'mouse' && mousePos.active) ? mouseNDC.x * 20 : 0;
+        const camTargetY = (inputMode === 'mouse' && mousePos.active) ? mouseNDC.y * 20 : 0;
+        camera.position.x += (camTargetX - camera.position.x) * 0.05;
+        camera.position.y += (camTargetY - camera.position.y) * 0.05;
+        camera.lookAt(scene.position);
+
+        net.group.rotation.set(Math.cos(time * 0.15) * 0.1, Math.sin(time * 0.3) * 0.2, 0);
+        net.lines.material.opacity = 0.15 + (Math.sin(time * 4) * 0.1);
+        pinchMultiplier += (targetPinchMultiplier - pinchMultiplier) * 0.1;
+
+        for (let i = 0; i < net.count; i++) {
+            const pData = net.particlesData[i];
+            tempPos.setFromMatrixPosition(net.originalMatrices[i]).multiplyScalar(pinchMultiplier);
+
+            let isHovered = false;
+            if (inputMode === 'mouse' && mousePos.active) {
+                const dx = tempPos.x - mouseWorldPos.x;
+                const dy = tempPos.y - mouseWorldPos.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < REPEL_RADIUS) {
+                    isHovered = true;
+                    const force = Math.pow((REPEL_RADIUS - dist) / REPEL_RADIUS, 1.5);
+                    const safeDist = dist || 0.001;
+                    tempPos.x += (dx / safeDist) * force * REPEL_STRENGTH;
+                    tempPos.y += (dy / safeDist) * force * REPEL_STRENGTH;
+                    tempPos.z += force * 10;
+                }
+            }
+
+            tempPos.x += Math.sin(time * 2 + pData.phaseX) * 0.5 * pinchMultiplier;
+            tempPos.y += Math.cos(time * 2 + pData.phaseY) * 0.5 * pinchMultiplier;
+
+            dummy.position.copy(tempPos);
+            dummy.scale.setScalar(pData.scale);
+            dummy.updateMatrix();
+
+            net.mesh.setMatrixAt(i, dummy.matrix);
+            net.currentPositions[i * 3] = tempPos.x;
+            net.currentPositions[i * 3 + 1] = tempPos.y;
+            net.currentPositions[i * 3 + 2] = tempPos.z;
+
+            if (isHovered) {
+                color.copy(net.targetColors[i]).multiplyScalar(1.15);
+                net.mesh.setColorAt(i, color);
+            } else {
+                net.mesh.setColorAt(i, net.targetColors[i]);
+            }
+        }
+
+        net.mesh.instanceMatrix.needsUpdate = true;
+        net.mesh.instanceColor.needsUpdate = true;
+
+        const linePositions = net.lines.geometry.attributes.position.array;
+        for (let c = 0; c < net.lineIndices.length; c++) {
+            const nodeIdx = net.lineIndices[c];
+            linePositions[c * 3] = net.currentPositions[nodeIdx * 3];
+            linePositions[c * 3 + 1] = net.currentPositions[nodeIdx * 3 + 1];
+            linePositions[c * 3 + 2] = net.currentPositions[nodeIdx * 3 + 2];
+        }
+        net.lines.geometry.attributes.position.needsUpdate = true;
+
+        composer.render();
+    }
+</script>
 </body>
 </html>
